@@ -1,0 +1,99 @@
+---
+title: "Proyecto_Final"
+author: Rosaelena Muñoz Ugalde
+---
+
+# Importación de librerias
+```{python}
+import sqlite3
+import pandas as pd
+import plotly.express as px
+```
+
+# Objetivo
+Analizar y visualizar datos de la base de datos Sakila para identificar patrones de comportamiento en los alquileres de películas, evaluar la popularidad de las películas y categorías, y explorar la relación entre diferentes factores como la duración de las películas, la cantidad de actores y las ventas mensuales.
+
+# Conexión a la base de datos
+```{python}
+ruta_bd = 'sakila_master.db'
+conn = sqlite3.connect(ruta_bd)
+```
+ 
+
+# Cargar las tablas necesarias en dataframes
+```{python}
+df_rental = pd.read_sql('SELECT * FROM rental', conn)
+df_inventory = pd.read_sql('SELECT * FROM inventory', conn)
+df_film = pd.read_sql('SELECT * FROM film', conn)
+df_payment = pd.read_sql('SELECT * FROM payment', conn)
+df_film_actor = pd.read_sql('SELECT * FROM film_actor', conn)
+df_category = pd.read_sql('SELECT * FROM category', conn)
+df_film_category = pd.read_sql('SELECT * FROM film_category', conn)
+```
+
+
+# Cerrar la conexión
+```{python}
+conn.close()
+```
+
+# Ejemplo 1: Gráfico de Líneas – Número de alquileres por mes
+```{python}
+df_rental['rental_date'] = pd.to_datetime(df_rental['rental_date'])
+df_rental_by_month = df_rental.groupby(df_rental['rental_date'].dt.to_period('M')).size().reset_index(name='count')
+df_rental_by_month['rental_date'] = df_rental_by_month['rental_date'].dt.to_timestamp()
+fig1 = px.line(df_rental_by_month, x='rental_date', y='count', title='Número de alquileres por mes')
+fig1.show()
+```
+# Una variación estacional en el número de alquileres de películas a lo largo del año. Los meses de verano mostraron un aumento en los alquileres, mientras que los meses de invierno presentaron una disminución.
+
+# Ejemplo 2: Gráfico de Barras – Top 10 películas más alquiladas
+```{python}
+df_merged = pd.merge(df_inventory, df_film, on='film_id')
+df_rental_inventory = pd.merge(df_rental, df_merged, on='inventory_id')
+df_top_films = df_rental_inventory.groupby('title')['rental_id'].count().reset_index(name='total_rentals')
+df_top_films = df_top_films.sort_values(by='total_rentals', ascending=False).head(10)
+fig2 = px.bar(df_top_films, x='title', y='total_rentals', title='Top 10 películas más alquiladas')
+fig2.show()
+```
+# Las 10 películas más alquiladas tienen una diferencia significativa en el número de alquileres respecto al resto del catálogo. Las películas de acción y comedia dominan este top, destacándose títulos populares que atraen a una amplia audiencia.
+
+# Ejemplo 3: Gráfico de Dispersión – Relación entre duración de películas y cantidad de alquileres
+```{python}
+df_duration_rental = df_rental_inventory.groupby('length')['rental_id'].count().reset_index(name='total_rental')
+fig3 = px.scatter(df_duration_rental, x='length', y='total_rental', title='Duración de películas vs Cantidad de alquileres')
+fig3.show()
+```
+# No se identificó una relación clara entre la duración de las películas y la cantidad de veces que son alquiladas. Películas tanto de corta como de larga duración mostraron variaciones en la frecuencia de alquiler.
+
+# Ejemplo 4: Gráfico de Barras – Categorías de películas más populares
+```{python}
+df_film_category_merged = pd.merge(df_film_category, df_category, on='category_id')
+df_rental_film_category = pd.merge(df_rental_inventory, df_film_category_merged, on='film_id')
+df_category_popularity = df_rental_film_category.groupby('name')['rental_id'].count().reset_index(name='total_rentals')
+df_category_popularity = df_category_popularity.sort_values(by='total_rentals', ascending=False)
+fig4 = px.bar(df_category_popularity, x='name', y='total_rentals', title='Popularidad de categorías de películas')
+fig4.show()
+```
+# Las categorías más populares en términos de número de alquileres fueron "Action", "Comedy" y "Drama". Estas categorías presentaron un número significativamente mayor de alquileres en comparación con géneros menos populares como "Documentary" o "Musical".
+
+# Ejemplo 5: Gráfico de Líneas – Ventas totales por mes
+```{python}
+df_payment['payment_date'] = pd.to_datetime(df_payment['payment_date'])
+df_sales_by_month = df_payment.groupby(df_payment['payment_date'].dt.to_period('M'))['amount'].sum().reset_index()
+df_sales_by_month['payment_date'] = df_sales_by_month['payment_date'].dt.to_timestamp()
+fig5 = px.line(df_sales_by_month, x='payment_date', y='amount', title='Ventas Totales por Mes')
+fig5.show()
+```
+# El análisis de las ventas mensuales mostró una tendencia creciente durante los meses de verano, alineada con el aumento de los alquileres. Se observaron picos en meses como junio y diciembre, coincidiendo con periodos vacacionales.
+
+# Ejemplo 6: Gráfico de Dispersión – Relación entre cantidad de actores y popularidad de películas
+```{python}
+df_top_films_id = df_rental_inventory.groupby(['film_id', 'title'])['rental_id'].count().reset_index(name='total_rentals')
+df_top_films_id = df_top_films_id.sort_values(by='total_rentals', ascending=False).head(10)
+df_film_actor_count = df_film_actor.groupby('film_id')['actor_id'].count().reset_index(name='actor_count')
+df_popularity_actor_count = pd.merge(df_top_films_id, df_film_actor_count, on='film_id', how='inner')
+fig6 = px.scatter(df_popularity_actor_count, x='actor_count', y='total_rentals', title='Cantidad de actores vs Popularidad de películas')
+fig6.show()
+```
+# Las películas que contaron con un mayor número de actores no necesariamente fueron las más alquiladas. La popularidad de una película parece estar influenciada por otros factores como la calidad del guion, el director o el marketing asociado al lanzamiento.
